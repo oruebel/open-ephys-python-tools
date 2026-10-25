@@ -25,6 +25,7 @@ SOFTWARE.
 
 import glob
 import os
+import re
 import h5py as h5
 import numpy as np
 import pandas as pd
@@ -181,16 +182,19 @@ class NwbContinuous(Continuous):
 
 class NwbRecording(Recording):
 
-    def __init__(self, directory: str, experiment_index=0, recording_index=0):
+    def __init__(
+        self, directory: str, experiment_index=0, recording_index=0, file_name=None
+    ):
+        """
+        file_name: name of the NWB file in the directory (default: experiment<experiment_index + 1>.nwb)
+        """
 
         Recording.__init__(self, directory, experiment_index, recording_index)
         self._format = RecordingFormat.nwb
-        self.nwb = h5.File(
-            os.path.join(
-                self.directory, "experiment" + str(self.experiment_index + 1) + ".nwb"
-            ),
-            "r",
-        )
+        if file_name is None:
+            file_name = "experiment" + str(self.experiment_index + 1) + ".nwb"
+        self.file_name = file_name
+        self.nwb = h5.File(os.path.join(self.directory, file_name), "r")
 
     def __delete__(self):
 
@@ -362,10 +366,20 @@ class NwbRecording(Recording):
 
         recordings = []
 
-        nwb_files = glob.glob(os.path.join(directory, "experiment*.nwb"))
+        # The plugin writes one file per experiment, experiment<N>.nwb. If the directory already contains that file
+        # when a recording starts (e.g., after the data directory was changed between recordings and back), the
+        # file is named after the experiment and its first recording instead: experiment<N>_recording<M>.nwb
+        name_pattern = re.compile(r"experiment(\d+)(?:_recording(\d+))?\.nwb$")
+        nwb_files = []
+        for file in glob.glob(os.path.join(directory, "experiment*.nwb")):
+            match = name_pattern.match(os.path.basename(file))
+            if match:
+                nwb_files.append(
+                    (int(match.group(1)), int(match.group(2) or 1), file)
+                )
         nwb_files.sort()
 
-        for experiment_index, file in enumerate(nwb_files):
+        for experiment_number, recording_number, file in nwb_files:
 
             try:
                 f = h5.File(file, "r")
@@ -376,7 +390,14 @@ class NwbRecording(Recording):
                     + "\nis likely still in use. Try closing the GUI and re-loading the session object."
                 )
             else:
-                recordings.append(NwbRecording(directory, experiment_index, 0))
+                recordings.append(
+                    NwbRecording(
+                        directory,
+                        experiment_number - 1,
+                        recording_number - 1,
+                        os.path.basename(file),
+                    )
+                )
                 f.close()
 
         return recordings

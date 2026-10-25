@@ -11,6 +11,10 @@
   - TTL events are read from the `EventsTable`s in `/events`, which are named as the Binary event folders
     (`<processor>-<id>.<stream>.TTL`)
 - `NwbRecording.load_messages` is implemented (new and previous NWB layout)
+- NWB files are opened by the names found in the Record Node directory, `experiment<N>.nwb` and
+  `experiment<N>_recording<M>.nwb` (written by the plugin if `experiment<N>.nwb` already exists), and ordered by
+  experiment and recording number (previously, the file names were derived from the position in the alphabetically
+  sorted list, which failed for missing experiment numbers and for 10 or more experiments)
 - Added a v1.1.0 NWB test file and tests
 
 ## 1.0.0

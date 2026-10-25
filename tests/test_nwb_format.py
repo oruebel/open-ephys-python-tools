@@ -1,4 +1,5 @@
 import os
+import shutil
 import numpy as np
 import pandas
 import pytest
@@ -195,3 +196,24 @@ def test_aqnwb_messages(nwb_aqnwb_recording: NwbRecording):
         "first message of recording 2",
         "second message of recording 2",
     ]
+
+
+def test_aqnwb_file_names(tmp_path):
+    # One file per experiment (experiment<N>.nwb), or experiment<N>_recording<M>.nwb if experiment<N>.nwb existed
+    # when recording M started; files are ordered by experiment and recording number (not alphabetically)
+    source = os.path.join(
+        os.path.dirname(__file__), "data", "v1.1.0_NWB", "Record Node 101", "experiment1.nwb"
+    )
+    for name in ["experiment1.nwb", "experiment1_recording3.nwb", "experiment2.nwb", "experiment10.nwb"]:
+        shutil.copy(source, tmp_path / name)
+    (tmp_path / "other.nwb").write_bytes(b"")  # not a file of the plugin
+
+    recordings = RecordNode(str(tmp_path)).recordings
+    assert [r.file_name for r in recordings] == [
+        "experiment1.nwb",
+        "experiment1_recording3.nwb",
+        "experiment2.nwb",
+        "experiment10.nwb",
+    ]
+    assert [(r.experiment_index, r.recording_index) for r in recordings] == [(0, 0), (0, 2), (1, 0), (9, 0)]
+    assert all(r.continuous[0].samples.shape[1] == 4 for r in recordings)
